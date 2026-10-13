@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumen Cordis - Plantilla Azul (Dark Mode)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #0f172a;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* min-height: 0 evita que el lienzo (1350/1920px) estire el workspace; así resizeCanvas() mide el espacio visible real */
+        #workspace {
+            flex-grow: 1;
+            min-height: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            overflow: hidden;
+        }
+
+        .lumen-canvas {
+            width: 1080px;
+            height: 1350px;
+            background-color: #162A43;
+            position: relative;
+            transform-origin: center center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        /*
+           CAMBIO: ahora es un <div> con background-image.
+           html2canvas NO soporta object-fit / object-position en <img>
+           (por eso la imagen salía estirada). El tamaño y la posición
+           se calculan en píxeles desde JS, así vista previa y PNG son idénticos.
+        */
+        .lumen-bg-image {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 80%;
+            height: 100%;
+            background-repeat: no-repeat;
+            opacity: 0.45;
+            z-index: 1;
+        }
+
+        /*
+           CAMBIO: "transparent" se reemplaza por rgba(22,42,67,0).
+           html2canvas interpreta "transparent" como negro transparente,
+           lo que oscurecía la transición.
+        */
+        .lumen-bg-gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, #162A43 35%, rgba(22, 42, 67, 0.8) 60%, rgba(22, 42, 67, 0) 100%);
+            z-index: 2;
+        }
+
+        .lumen-logo {
+            position: absolute;
+            top: 80px;
+            left: 80px;
+            width: 130px;
+            height: 130px;
+            object-fit: contain;
+            border-radius: 50%;
+            background-color: #FFFFFF;
+            padding: 8px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .lumen-strip {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 12px;
+            display: flex;
+            z-index: 10;
+        }
+        .strip-blue { width: 33.33%; background-color: #2A75B3; }
+        .strip-red { width: 33.33%; background-color: #BE1E2D; }
+        .strip-yellow { width: 33.34%; background-color: #E9B439; }
+
+        .lumen-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0 160px;
+            z-index: 10;
+        }
+
+        .lumen-quote {
+            font-family: 'Playfair Display', serif;
+            font-size: 64px;
+            line-height: 1.35;
+            color: #FAFAFA;
+            text-align: center;
+            outline: none;
+            margin-bottom: 40px;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .lumen-divider {
+            width: 60px;
+            height: 3px;
+            background-color: #BE1E2D;
+            margin-bottom: 40px;
+        }
+
+        .lumen-author {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 24px;
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            color: #E9B439;
+            text-align: center;
+            outline: none;
+        }
+
+        /*
+           Zona segura de Historias: Instagram tapa ~14% (270px) arriba
+           (barra de progreso, avatar, nombre, botón atrás) y abajo
+           (caja de respuesta / "Add a caption"). Logo y texto van fuera de esas franjas.
+        */
+        .lumen-canvas.format-story .lumen-logo {
+            top: 270px;
+        }
+        .lumen-canvas.format-story .lumen-content {
+            top: 270px;
+            bottom: 270px;
+        }
+
+        [contenteditable="true"]:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            cursor: text;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="bg-gray-900 text-white p-4 shadow-md flex justify-between items-center z-20 relative">
+        <div>
+            <h1 class="text-xl font-semibold tracking-wide flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-[#162A43] border border-gray-600"></span>
+                Lumen Cordis
+            </h1>
+            <p class="text-xs text-gray-400 mt-1">Generador: Plantilla Azul + Imagen Fondo</p>
+        </div>
+        <div class="flex gap-3 items-center">
+            <input type="file" id="imageUploader" accept="image/*" class="hidden">
+
+            <div class="flex items-center gap-1 bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-600 shadow-sm" id="imageControls">
+                <span class="text-xs text-gray-300" title="Zoom">🔍</span>
+                <input type="range" id="zoomSlider" min="0.5" max="3" value="1" step="0.05" class="w-16 accent-[#2A75B3]">
+
+                <span class="text-xs text-gray-300 ml-2" title="Mover Horizontal">↔️</span>
+                <input type="range" id="posXSlider" min="0" max="100" value="50" class="w-16 accent-[#2A75B3]">
+
+                <span class="text-xs text-gray-300 ml-2" title="Mover Vertical">↕️</span>
+                <input type="range" id="posYSlider" min="0" max="100" value="20" class="w-16 accent-[#2A75B3]">
+            </div>
+
+            <select id="formatSelector" class="bg-gray-800 text-white px-3 py-2 rounded-lg text-sm border border-gray-600 shadow-sm outline-none cursor-pointer">
+                <option value="post">Formato Post (4:5)</option>
+                <option value="story">Formato Historia (9:16)</option>
+            </select>
+
+            <button onclick="document.getElementById('imageUploader').click()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors border border-gray-600 shadow-sm flex items-center gap-2">
+                <span>📷</span> Cambiar Fondo
+            </button>
+            <button id="downloadBtn" onclick="downloadPost()" class="bg-[#2A75B3] hover:bg-[#1f598a] text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors shadow-md flex items-center gap-2">
+                <span>⬇️</span> Descargar Post
+            </button>
+        </div>
+    </header>
+
+    <main id="workspace">
+        <div class="lumen-canvas" id="canvas">
+
+            <!-- CAMBIO: <div> en lugar de <img> -->
+            <div id="bgImageElement" class="lumen-bg-image" role="img" aria-label="Fondo Santo"></div>
+
+            <div class="lumen-bg-gradient"></div>
+
+            <img src="lumen.jpeg" alt="Lumen Cordis Logo" class="lumen-logo" onerror="this.onerror=null; this.src='https://placehold.co/140x140/FFFFFF/162A43?text=LC';">
+
+            <div class="lumen-content">
+                <div class="lumen-quote" contenteditable="true" spellcheck="false">
+                    La fe y la razón son como las dos alas con las cuales el espíritu humano se eleva hacia la contemplación de la verdad.
+                </div>
+
+                <div class="lumen-divider"></div>
+
+                <div class="lumen-author" contenteditable="true" spellcheck="false">
+                    San Bruno de Colonia
+                </div>
+            </div>
+
+            <div class="lumen-strip">
+                <div class="strip-blue"></div>
+                <div class="strip-red"></div>
+                <div class="strip-yellow"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        let currentCanvasWidth = 1080;
+        let currentCanvasHeight = 1350;
+        let currentFormat = 'post';
+
+        // Tamaño real de la imagen cargada (necesario para calcular el "cover")
+        let bgNatural = { w: 0, h: 0 };
+
+        const canvasEl = document.getElementById('canvas');
+        const bgLayer = document.getElementById('bgImageElement');
+        const imageUploader = document.getElementById('imageUploader');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const posXSlider = document.getElementById('posXSlider');
+        const posYSlider = document.getElementById('posYSlider');
+
+        function resizeCanvas() {
+            const workspace = document.getElementById('workspace');
+            const availableWidth = workspace.clientWidth - 64;
+            const availableHeight = workspace.clientHeight - 64;
+            const scale = Math.min(availableWidth / currentCanvasWidth, availableHeight / currentCanvasHeight, 1);
+            canvasEl.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+
+        document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+            el.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+                const cleanText = text.replace(/["“”«»]/g, '');
+                document.execCommand('insertText', false, cleanText);
+            });
+        });
+
+        /**
+         * Calcula manualmente el equivalente de object-fit: cover + zoom + posición,
+         * y lo aplica como background-size / background-position en píxeles.
+         * html2canvas sí respeta estos valores, así el PNG = vista previa.
+         */
+        function updateImageTransform() {
+            if (!bgNatural.w) return;
+
+            const boxW = currentCanvasWidth * 0.8;  // .lumen-bg-image ocupa 80% del ancho
+            const boxH = currentCanvasHeight;
+            const zoom = parseFloat(zoomSlider.value);
+
+            const coverScale = Math.max(boxW / bgNatural.w, boxH / bgNatural.h) * zoom;
+            const imgW = bgNatural.w * coverScale;
+            const imgH = bgNatural.h * coverScale;
+
+            const offsetX = (boxW - imgW) * (posXSlider.value / 100);
+            const offsetY = (boxH - imgH) * (posYSlider.value / 100);
+
+            bgLayer.style.backgroundSize = `${imgW}px ${imgH}px`;
+            bgLayer.style.backgroundPosition = `${offsetX}px ${offsetY}px`;
+        }
+
+        // Carga la imagen, lee sus dimensiones reales y la aplica como fondo
+        function loadBackground(src) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                if (!src.startsWith('data:')) img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    bgNatural = { w: img.naturalWidth, h: img.naturalHeight };
+                    bgLayer.style.backgroundImage = `url("${src}")`;
+                    updateImageTransform();
+                    resolve();
+                };
+                img.onerror = () => resolve();
+                img.src = src;
+            });
+        }
+
+        zoomSlider.addEventListener('input', updateImageTransform);
+        posXSlider.addEventListener('input', updateImageTransform);
+        posYSlider.addEventListener('input', updateImageTransform);
+
+        document.getElementById('formatSelector').addEventListener('change', function(e) {
+            currentFormat = e.target.value;
+            currentCanvasWidth = 1080;
+            currentCanvasHeight = currentFormat === 'story' ? 1920 : 1350;
+            canvasEl.style.width = currentCanvasWidth + 'px';
+            canvasEl.style.height = currentCanvasHeight + 'px';
+            canvasEl.classList.toggle('format-story', currentFormat === 'story');
+            updateImageTransform(); // CAMBIO: recalcular el recorte para el nuevo formato
+            resizeCanvas();
+        });
+
+        imageUploader.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                zoomSlider.value = 1;
+                posXSlider.value = 50;
+                posYSlider.value = 50;
+                loadBackground(e.target.result);
+            };
+            reader.readAsDataURL(file);
+            event.target.value = ''; // permite volver a subir el mismo archivo
+        });
+
+        /**
+         * Exportación:
+         * - No toca la vista previa: escala y posición se corrigen solo en la copia clonada.
+         * - Espera a que las fuentes estén listas.
+         * - Nombre de archivo único con formato y hora.
+         */
+        async function downloadPost() {
+            const btn = document.getElementById('downloadBtn');
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            try {
+                await document.fonts.ready;
+                updateImageTransform();
+
+                const result = await html2canvas(canvasEl, {
+                    width: currentCanvasWidth,
+                    height: currentCanvasHeight,
+                    windowWidth: currentCanvasWidth,
+                    windowHeight: currentCanvasHeight,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0,
+                    scale: 1,
+                    useCORS: true,
+                    backgroundColor: '#162A43',
+                    logging: false,
+                    onclone: (doc) => {
+                        const clone = doc.getElementById('canvas');
+                        // Sacar el lienzo del contenedor centrado y quitar la escala
+                        clone.style.transform = 'none';
+                        clone.style.position = 'absolute';
+                        clone.style.top = '0';
+                        clone.style.left = '0';
+                        clone.style.margin = '0';
+                        clone.style.boxShadow = 'none';
+                        doc.body.style.margin = '0';
+                        doc.body.appendChild(clone);
+                        clone.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+                    }
+                });
+
+                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                const link = document.createElement('a');
+                link.download = `Lumen-Cordis-Azul-${currentFormat}-${stamp}.png`;
+                link.href = result.toDataURL('image/png');
+                link.click();
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '';
+            }
+        }
+    </script>
+
+</body>
+</html>
